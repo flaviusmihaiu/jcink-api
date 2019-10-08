@@ -3,3 +3,5 @@
 # Templates
 
 > under development
+
+[Go to Templates Folder &rarr;](/templates)

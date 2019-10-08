@@ -12,6 +12,7 @@
 * [Min](#min)
 * [Max](#max)
 * [Range](#range)
+* [Alpha](#alpha)
 * [Alphanumeric](#alphanumeric)
 * [Slug](#slug)
 * [Pattern](#pattern)
@@ -34,6 +35,9 @@ console.log(string);
  * @return {boolean}
  */
 let number = api.validate.number(100);
+console.log(number);
+// console: true
+let number = api.validate.number('100');
 console.log(number);
 // console: true
 ```
@@ -139,6 +143,18 @@ console.log(rangeNumber);
 // console: true
 ```
 
+### Alpha
+```js
+/**
+ * @param {string} param
+ * @return {boolean}
+ */
+let alpha = api.validate.alpha('abcABC');
+console.log(alpha);
+// console: true
+```
+
+
 ### Alphanumeric
 ```js
 /**
@@ -158,6 +174,7 @@ console.log(alphanumeric);
  */
 let slug = api.validate.slug('this-is-a-slug');
 console.log(slug);
+// console: true
 ```
 
 ### Pattern
