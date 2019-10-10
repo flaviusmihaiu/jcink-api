@@ -1,4 +1,4 @@
-const api = {
+const api2 = {
     ajax: {
         get: function(get, callback) {
             let url;
@@ -10,12 +10,13 @@ const api = {
             }
 
             $.get(url, function(body) {
-                if(body.querySelectAll('#board-message').length) {
+                let dom = new DOMParser().parseFromString(body, "text/html");
+                if(dom.querySelectorAll('#board-message').length) {
                     api.log('error', ['api.ajax.get(' + url + ')']);
                     return;
                 }
                 
-                callback(api.response(body));
+                callback(api.response(dom));
             });
         },
         post: function (get, post, callback) {
@@ -28,12 +29,13 @@ const api = {
             }
 
             $.get(url, function(body) {
-                if(body.querySelectAll('#board-message').length) {
+                let dom = new DOMParser().parseFromString(body, "text/html");
+                if(dom.querySelectorAll('#board-message').length) {
                     api.log('error', ['api.ajax.post(' + url + ')', '$.get(' + url + ')']);
                     return;
                 }
 
-                let form = $('form', body).serializeArray();
+                let form = $('form', dom).serializeArray();
                 let object = {};
                 form.forEach(function (value, key) {
                     object[key] = value;
@@ -42,12 +44,13 @@ const api = {
 
                 let url = window.location.origin + window.location.pathname;
                 $.post(url, object, function(body) {
-                    if(body.querySelectAll('#board-message').length) {
+                    let dom = new DOMParser().parseFromString(body, "text/html");
+                    if(dom.querySelectorAll('#board-message').length) {
                         api.log('error', ['api.ajax.post(' + url + ')', '$.post(' + url + ')', object]);
                         return;
                     }
 
-                    callback(api.response(body));
+                    callback(api.response(dom));
                 });
             });
         },
@@ -104,7 +107,7 @@ const api = {
                     // ORGANISE SUBFORUMS
                     if(forum.subforumsList !== '') {
                         forum.subforums = [];
-                        let dom = new DOMParser().parseFromString(forum.subforumsList, "text/html")
+                        let dom = new DOMParser().parseFromString(forum.subforumsList, "text/html");
                         let subforums = dom.querySelectorAll('a.tooltip');
                         if(subforums.length > 0) {
                             subforums.forEach(subforum => {
