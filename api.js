@@ -1,4 +1,4 @@
-const api2 = {
+const api = {
     ajax: {
         get: function(get, callback) {
             let url;
