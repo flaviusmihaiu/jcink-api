@@ -54,14 +54,14 @@ const api = {
     },
     response: function(body = document) {
         // FIND API BLOCKS
-        let elements = ['category', 'forum', 'topic', 'post', 'member'];
+        let elements = ['category', 'forum', 'topic', 'post', 'member', 'stats', 'profile'];
         let data = {};
         elements.forEach(element => {
             let DOMs = body.querySelectorAll('div[data-api="' + element + '"]');
             if(DOMs.length == 1) {
                 data[element] = {};
-
-                let blocks = DOMs.querySelectorAll('div[data-api]');
+                
+                let blocks = DOMs[0].querySelectorAll('div[data-api]');
                 blocks.forEach(block => {
                     let key = block.getAttribute('data-api');
                     let value = block.innerHTML;
@@ -102,7 +102,6 @@ const api = {
                     });
 
                     // ORGANISE SUBFORUMS
-                    console.log(forum.subforumsList)
                     if(forum.subforumsList !== '') {
                         forum.subforums = [];
                         let dom = new DOMParser().parseFromString(forum.subforumsList, "text/html")
@@ -132,6 +131,10 @@ const api = {
                     forum['topics'] = data.topic;
                 }
                 data.forum = forum;
+            } else {
+                if(data.hasOwnProperty('topic')) {
+                    data.forum['topics'] = data.topic;
+                }
             }
             // DELETE UNREQUIRED KEYS
             delete data.topic;
