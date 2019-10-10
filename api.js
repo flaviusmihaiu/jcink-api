@@ -54,7 +54,7 @@ const api = {
     },
     response: function(body = document) {
         // FIND API BLOCKS
-        let elements = ['category', 'forum', 'topic', 'post', 'member', 'stats', 'profile'];
+        let elements = ['category', 'forum', 'topic', 'post', 'member'];
         let data = {};
         elements.forEach(element => {
             let DOMs = body.querySelectorAll('div[data-api="' + element + '"]');
