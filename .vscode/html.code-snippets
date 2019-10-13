@@ -1,7 +1,0 @@
-{
-    "dataApiBlock": {
-        "scope": "html",
-        "prefix": "dataApiBlock",
-        "body": ["<div data-api=\"${1}\">${2}</div>"]
-    }
-}

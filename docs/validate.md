@@ -17,6 +17,8 @@
 * [Slug](#slug)
 * [Pattern](#pattern)
 
+---
+
 ### String
 ```js
 /**

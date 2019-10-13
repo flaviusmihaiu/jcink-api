@@ -1,4 +1,16 @@
+[&#x2190; Back](/README.md)
+
 # Form
+
+### Contents
+* [Form Object](#form-object)
+* [Form Data](#form-data)
+* [Usage](#usage)
+* [Extended](#extended)
+    * [Serialize and Unserialize](#serialize-and-unserialize)
+    * [Grouping Inputs](#grouping-inputs)
+
+---
 
 ### Form Object
 
@@ -68,9 +80,39 @@ document.body.appendChild(formHTML);
 // innerHTML will not work as 'api.form.create()' returns [object HTMLFormElement]
 ```
 
-### Extended
+---
 
-#### Grouping Inputs
+## Extended
+
+### Serialize and Unserialize
+
+1. Serialize data from and existing form.
+
+```js
+let formElement = document.querySelector('form');
+let serialized = api.form.serialize(formElement);
+console.log(serialized);
+// console: inputName=some+value&otherInputName=some+other+value
+```
+
+2. Unserialize the data from the grabbed form after you have serialized it.
+
+```js
+let unserialized = api.form.unserialize(serialized);
+console.log(unserialized);
+// console: {inputName: 'some value', otherInputName: 'some other value'}
+```
+
+3. Pass it into your form so it has preset data.
+
+```js
+let formDataFromPage = unserialized;
+let formHTML = api.form.create(formObject, formDataFromPage);
+document.body.appendChild(formHTML);
+// form will be set with pre-existing data from the page
+```
+
+### Grouping Inputs
 
 > under development
 

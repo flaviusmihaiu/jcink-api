@@ -280,14 +280,14 @@ const api = {
 		console.groupEnd();
     },
     form: {
-        serialise: function(formElement) {
+        serialize: function(formElement) {
             // https://stackoverflow.com/a/44033425
             return Array.from(
                 new FormData(formElement),
                 e => e.map(encodeURIComponent).join('=')
             ).join('&');
         },
-        unserialise: function(string) {
+        unserialize: function(string) {
             let object = {};
             string.split('&').forEach(query => {
                 let key = query.split('=')[0];
