@@ -87,7 +87,7 @@ console.log(url);
 ```
 
 ### Email
-* [MSDN Email Basic Validation](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/email#Basic_validation)
+* [MDN Email Basic Validation](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/email#Basic_validation)
 ```js
 /**
  * @param {string} param
