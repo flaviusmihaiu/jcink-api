@@ -116,7 +116,7 @@ document.body.appendChild(formHTML);
 
 > under development
 
-Using `{type: 'group'}` on the `forum.children` will allow you to create grouped inputs. This is acheived in the following way:
+Using `{type: 'group'}` on the `form.children` will allow you to create grouped inputs. This is acheived in the following way:
 
 ```js
 let formObject = {

@@ -1,4 +1,4 @@
-const api = {
+const api2 = {
     ajax: {
         get: function(get, callback) {
             let url;
@@ -153,6 +153,43 @@ const api = {
             data['members'] = data.member;
             // DELETE UNREQUIRED KEYS
             delete data.member;
+        }
+
+        // RECENT TOPICS
+        if($('#recent-topics').length) {
+            data['recentTopics'] = [];
+            $('#recent-topics tr').each(function(index, row) {
+                let topic = $(row).find('.recent-topics-info a[href*="showtopic"]').clone();
+                let topicLink = topic.wrapAll('<div>').parent().html();
+                let topicName = topic.text();
+                let topicUrl = topic[0].getAttribute('href');
+                let topicId = api.url.decode(topicUrl)['showtopic'];
+                let user = $(row).find('.recent-topics-info a[href*="showuser"]').clone();
+                let userLink = user.wrapAll('<div>').parent().html();
+                let userName = user.text();
+                let userUrl = user[0].getAttribute('href');
+                let userId = api.url.decode(userUrl)['showuser'];
+                let forum = $(row).find('.recent-topics-info a[href*="showforum"]').clone();
+                let forumLink = forum.wrapAll('<div>').parent().html();
+                let forumUrl = forum[0].getAttribute('href');
+                let forumId = api.url.decode(forumUrl)['showforum'];
+                let date = $.trim($(row).find('.recent-topics-date').text());
+                let recentTopicObject = {
+                    topicLink: topicLink,
+                    topicName: topicName,
+                    topicUrl: topicUrl,
+                    topicId: topicId,
+                    userLink: userLink,
+                    userName: userName,
+                    userUrl: userUrl,
+                    userId: userId,
+                    forumLink: forumLink,
+                    forumUrl: forumUrl,
+                    forumId: forumId,
+                    date: date
+                };
+                data['recentTopics'].push(recentTopicObject);
+            });
         }
 
         return data;
