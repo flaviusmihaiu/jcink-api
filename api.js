@@ -1,663 +1,524 @@
-const api = {
-    ajax: {
-        get: function(get, callback) {
-            let url;
-            if(api.validate.string(get) && api.validate.url(get)) {
-                url = get;
-            }
-            else if(api.validate.object(get)) {
-                url = window.location.origin + window.location.pathname + '?' + api.url.encode(get);
-            }
+class api {
+	constructor (dom = window.document, location = window.location.href) {
+		this.dom = dom
+		this.location = location
+	}
 
-            $.get(url, function(body) {
-                let dom = new DOMParser().parseFromString(body, "text/html");
-                if(dom.querySelectorAll('#board-message').length) {
-                    api.log('error', ['api.ajax.get(' + url + ')']);
-                    return;
-                }
-                
-                callback(api.response(dom));
-            });
-        },
-        post: function (get, post, callback) {
-            let url;
-            if(api.validate.string(get) && api.validate.url(get)) {
-                url = get;
-            }
-            else if(api.validate.object(get)) {
-                url = window.location.origin + window.location.pathname + '?' + api.url.encode(get);
-            }
+	getDom () {
+		return this.dom
+	}
 
-            $.get(url, function(body) {
-                let dom = new DOMParser().parseFromString(body, "text/html");
-                if(dom.querySelectorAll('#board-message').length) {
-                    api.log('error', ['api.ajax.post(' + url + ')', '$.get(' + url + ')']);
-                    return;
-                }
+	setDom (dom = window.document) {
+		this.dom = dom
+	}
 
-                let form = $('form', dom).serializeArray();
-                let object = {};
-                form.forEach(function (value, key) {
-                    object[key] = value;
-                });
-                Object.assign({}, object, post);
+	getLocation () {
+		return this.location
+	}
 
-                let url = window.location.origin + window.location.pathname;
-                $.post(url, object, function(body) {
-                    let dom = new DOMParser().parseFromString(body, "text/html");
-                    if(dom.querySelectorAll('#board-message').length) {
-                        api.log('error', ['api.ajax.post(' + url + ')', '$.post(' + url + ')', object]);
-                        return;
-                    }
+	setLocation (location = location.href) {
+		this.location = location
+	}
 
-                    callback(api.response(dom));
-                });
-            });
-        },
-    },
-    response: function(body = document) {
-        // FIND API BLOCKS
-        let elements = ['category', 'forum', 'topic', 'post', 'member', 'stats', 'profile'];
-        let data = {};
-        elements.forEach(element => {
-            let DOMs = body.querySelectorAll('div[data-api="' + element + '"]');
-            if(DOMs.length == 1) {
-                data[element] = {};
-                
-                let blocks = DOMs[0].querySelectorAll('div[data-api]');
-                blocks.forEach(block => {
-                    let key = block.getAttribute('data-api');
-                    let value = block.innerHTML;
-                    data[element][key] = value;
-                });
-            }
-            else if(DOMs.length > 1) {
-                data[element] = [];
-
-                DOMs.forEach(DOM => {
-                    let object = {};
-
-                    let blocks = DOM.querySelectorAll('div[data-api]');
-                    blocks.forEach(block => {
-                        let key = block.getAttribute('data-api');
-                        let value = block.innerHTML;
-                        object[key] = value;
-                    });
-
-                    data[element].push(object);
-                });
-            }
-        });
-
-        // ORGANISE RESPONSE OBJECT
-        if(data.hasOwnProperty('category')) {
-            if(data.hasOwnProperty('forum')) {
-                data.forum.forEach(forum => {
-                    // MOVE TO CATEGORY
-                    data.category.forEach(category => {
-                        if(!category.hasOwnProperty('forums')) {
-                            category['forums'] = [];
-                        }
-                        if(forum.categoryId == category.id) {
-                            category.forums.push(forum);
-                            return;
-                        }
-                    });
-
-                    // ORGANISE SUBFORUMS
-                    if(forum.subforumsList !== '') {
-                        forum.subforums = [];
-                        let dom = new DOMParser().parseFromString(forum.subforumsList, "text/html");
-                        let subforums = dom.querySelectorAll('a.tooltip');
-                        if(subforums.length > 0) {
-                            subforums.forEach(subforum => {
-                                let url = subforum.getAttribute('href');
-                                let name = subforum.innerHTML;
-                                let id = api.url.decode(url).showforum;
-                                forum.subforums.push({id: id, name: name, url: url});
-                            });
-                        }
-                    }
-                });
-            }
-            // REASSIGN CATEGORY to CATEGORIES
-            data['categories'] = data.category;
-            // DELETE UNREQUIRED KEYS
-            delete data.category;
-            delete data.forum;
-        }
-        else if(data.hasOwnProperty('forum')) {
-            if(api.validate.array(data.forum)) {
-                let forum = data.forum.pop();
-                forum['subforums'] = data.forum;
-                if(data.hasOwnProperty('topic')) {
-                    forum['topics'] = data.topic;
-                }
-                data.forum = forum;
-            } else {
-                if(data.hasOwnProperty('topic')) {
-                    data.forum['topics'] = data.topic;
-                }
-            }
-            // DELETE UNREQUIRED KEYS
-            delete data.topic;
-        }
-        else if(data.hasOwnProperty('topic')) {
-            if(data.hasOwnProperty('post')) {
-                data.topic['posts'] = data.post;
-            }
-            // DELETE UNREQUIRED KEYS
-            delete data.post;
-        }
-        else if(data.hasOwnProperty('member')) {
-            data['members'] = data.member;
-            // DELETE UNREQUIRED KEYS
-            delete data.member;
-        }
-
-        // RECENT TOPICS
-        if($('#recent-topics').length) {
-            data['recentTopics'] = [];
-            $('#recent-topics tr').each(function(index, row) {
-                let topic = $(row).find('.recent-topics-info a[href*="showtopic"]').clone();
-                let topicLink = topic.wrapAll('<div>').parent().html();
-                let topicName = topic.text();
-                let topicUrl = topic[0].getAttribute('href');
-                let topicId = api.url.decode(topicUrl)['showtopic'];
-                let user = $(row).find('.recent-topics-info a[href*="showuser"]').clone();
-                let userLink = user.wrapAll('<div>').parent().html();
-                let userName = user.text();
-                let userUrl = user[0].getAttribute('href');
-                let userId = api.url.decode(userUrl)['showuser'];
-                let forum = $(row).find('.recent-topics-info a[href*="showforum"]').clone();
-                let forumLink = forum.wrapAll('<div>').parent().html();
-                let forumUrl = forum[0].getAttribute('href');
-                let forumId = api.url.decode(forumUrl)['showforum'];
-                let date = $.trim($(row).find('.recent-topics-date').text());
-                let recentTopicObject = {
-                    topicLink: topicLink,
-                    topicName: topicName,
-                    topicUrl: topicUrl,
-                    topicId: topicId,
-                    userLink: userLink,
-                    userName: userName,
-                    userUrl: userUrl,
-                    userId: userId,
-                    forumLink: forumLink,
-                    forumUrl: forumUrl,
-                    forumId: forumId,
-                    date: date
-                };
-                data['recentTopics'].push(recentTopicObject);
-            });
-        }
-
-        return data;
-    },
-    validate: {
-        string: function(param) {
-            return (param && (typeof param == 'string' || param instanceof String));
-        },
-        number: function(param) {
-            return (
-                param &&
-                (
-                    (typeof param == 'number' || param instanceof Number) ||
-                    (api.validate.string(param) && api.validate.pattern(param, /^-?\d+$/))
-                )
-            );
-        },
-        array: function(param) {
-            return (param && (Array.isArray(param) || param instanceof Array));
-        },
-        object: function(param) {
-            return (param && (typeof param == 'object' || param instanceof Object) && !Array.isArray(param));
-        },
-        function: function(param) {
-            return (param && (typeof param == 'function' || param instanceof Function))
-        },
-        url: function(param) {
-            try {
-                new URL(param);
-                return true;
-            }
-            catch {
-                return false;
-            }
-        },
-        email: function(param) {
-            return (
-                param && 
-                api.validate.string(param) &&
-                api.validate.pattern(param, /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/)
-            );
-        },
-        min: function(param, min) {
-            return (
-                param && min && api.validate.number(min) && 
-                (
-                    (api.validate.string(param) && param.length >= min) || 
-                    (api.validate.number(param) && param >= min)
-                )
-            );
-        },
-        max: function(param, max) {
-            return (
-                param && max && api.validate.number(max) && 
-                (
-                    (api.validate.string(param) && param.length <= max) || 
-                    (api.validate.number(param) && param <= max)
-                )
-            );
-        },
-        range: function(param, min, max) {
-            return (param && min && max && api.validate.min(param, min) && api.validate.max(param, max));
-        },
-        alpha: function(param) {
-            return (
-                param && 
-                api.validate.string(param) && 
-                api.validate.pattern(param, /^[a-zA-Z]+$/)
-            );
-        },
-        alphanumeric: function(param) {
-            return (
-                param && 
-                api.validate.string(param) && 
-                api.validate.pattern(param, /^\w+$/)
-            );
-        },
-        slug: function(param) {
-            return (
-                param && 
-                api.validate.string(param) &&
-                api.validate.pattern(param, /^[a-z0-9-]+$/)
-            );
-        },
-        pattern: function(param, pattern) {
-            if(param && pattern && api.validate.string(param)) {
-                let regex = new RegExp(pattern);
-                return regex.test(param);
-            } else {
-                return false;
-            }
-        }
-    },
-    url: {
-        encode: function(params) {
-            let array = [];
-            for (let [key, value] of Object.entries(params)) {
-                array.push(encodeURIComponent(key) + '=' + encodeURIComponent(value));
-            }
-            return array.join('&');
-        },
-        decode: function(param) {
-            let url = new URL(param);
-            let object = {};
-            if(url.search !== '') {
-                url.search.substr(1).split('&').forEach(query => {
-                    let key = query.split('=')[0];
-                    let value = query.split('=')[1];
-                    if(key == '' && value == '') return;
-                    object[key] = value;
-                });
-            }
-            return object;
-        }
-    },
-    log: function(type, messages) {
-		console.group('Jcink API ' + type.charAt(0).toUpperCase() + type.slice(1))
-		if(api.validate.array(messages)) {
-			messages.forEach(message => {
-				console.log(message);
-			});
-		} else {
-			console.log(messages);
+	parse (dom = this.getDom(), location = this.getLocation(), data = {}) {
+		// apiElements
+		let apiObjectElements = dom.querySelectorAll('[data-api-object]')
+		if (apiObjectElements) {
+			apiObjectElements.forEach(apiObject => {
+				let apiObjectKey = apiObject.dataset.apiObject
+				// create Array if it does not exist
+				!data.hasOwnProperty(apiObjectKey) ? data[apiObjectKey] = [] : null
+				let dataPairs = {}
+				let apiPairElements = apiObject.querySelectorAll('[data-api-pair')
+				if(apiPairElements) {
+					apiPairElements.forEach(apiPair => {
+						// remove placeholder value
+						apiPair.innerHTML = apiPair.innerHTML.replace(/<!--[^>]*-->/gm, '').replace(/^--$/, '')
+						dataPairs[apiPair.dataset.apiPair] = !apiPair.innerHTML == '' ? apiPair.innerHTML : null
+					})
+					// push Object to Array when all keys and values set
+					data[apiObjectKey].push(dataPairs)
+				}
+			})
 		}
-		console.groupEnd();
-    },
-    form: {
-        serialize: function(formElement) {
-            // https://stackoverflow.com/a/44033425
-            return Array.from(
-                new FormData(formElement),
-                e => e.map(encodeURIComponent).join('=')
-            ).join('&');
-        },
-        unserialize: function(string) {
-            let object = {};
-            string.split('&').forEach(query => {
-                let key = query.split('=')[0];
-                let value = query.split('=')[1];
-                if(key == '' && value == '') return;
-                object[key] = value;
-            });
-            return object;
-        },
-        create: function(formObject, dataObject) {
-            let defaultFormAttributes = ['accept-charset', 'action', 'autocapitalize', 'autocomplete', 'enctype', 'method', 'name', 'novalidate', 'target'];
-            let defaultInputAttributes = ['autocomplete', 'autofocus', 'disabled', 'form', 'list', 'name', 'readonly', 'required', 'tabindex', 'type', 'value'];
-            let extendedInputAttributes = {
-                button: [],
-                checkbox: ['checked', 'value'],
-                color: [],
-                date: ['max', 'min', 'step'],
-                'datetime-local': ['max', 'min', 'step', 'readonly'],
-                email: ['maxlength', 'minlength', 'multiple', 'pattern', 'placeholder', 'size', 'spellcheck', 'autocorrect', 'mozactionhint'],
-                file: ['accept', 'capture', 'files', 'multiple', 'webkitdirectory'],
-                hidden: [],
-                image: ['alt', 'formataction', 'formenctype', 'formnovalidate', 'formtarget', 'height', 'src', 'width'],
-                month: ['max', 'min', 'step'],
-                number: ['max', 'min', 'placeholder', 'step'],
-                password: ['maxlength', 'minlength', 'pattern', 'placeholder', 'size'],
-                radio: ['checked', 'value'],
-                range: ['max', 'min', 'step'],
-                reset: [],
-                search: ['maxlength', 'minlength', 'pattern', 'placeholder', 'size', 'spellcheck', 'autocorrect', 'incremental', 'mozactionhint', 'results'],
-                submit: ['formaction', 'formenctype', 'formmethod', 'formnovalidate', 'formtarget'],
-                tel: ['maxlength', 'minlength', 'pattern', 'placeholder', 'size', 'spellcheck', 'autocorrect', 'mozactionhint'],
-                text: ['maxlength', 'minlength', 'pattern', 'placeholder', 'size', 'spellcheck', 'autocorrect', 'mozactionhint'],
-                time: ['max', 'min', 'step'],
-                url: ['maxlength', 'minlength', 'pattern', 'placeholder', 'size', 'spellcheck', 'autocorrect', 'mozactionhint'],
-                week: ['max', 'min', 'step'],
-                select: ['autocomplete', 'autofocus', 'disabled', 'form', 'multiple', 'name', 'required', 'size'],
-                textarea: ['autocapitalize', 'autocomplete', 'autofocus', 'cols', 'disabled', 'form', 'maxlength', 'minlength', 'name', 'placeholder', 'readonly', 'required', 'rows', 'spellcheck', 'wrap'],
-                option: ['disabled', 'label', 'selected', 'value']
-            };
-            let globalAttributes = ['accesskey', 'autocapitalize', 'class', 'contenteditable', 'dir', 'draggable', 'hidden', 'id', 'inputmode', 'is', 'itemid', 'itemprop', 'itemref', 'itemscope', 'itemtype', 'lang', 'slot', 'style', 'tabindex', 'title'];
-            let eventHandlerAttributes = ['onabort', 'onautocomplete', 'onautocompleteerror', 'onblur', 'oncancel', 'oncanplay', 'oncanplaythrough', 'onchange', 'onclick', 'onclose', 'oncontextmenu', 'oncuechange', 'ondblclick', 'ondrag', 'ondragend', 'ondragenter', 'ondragexit', 'ondragleave', 'ondragover', 'ondragstart', 'ondrop', 'ondurationchange', 'onemptied', 'onended', 'onerror', 'onfocus', 'oninput', 'oninvalid', 'onkeydown', 'onkeypress', 'onkeyup', 'onload', 'onloadeddata', 'onloadedmetadata', 'onloadstart', 'onmousedown', 'onmouseenter', 'onmouseleave', 'onmousemove', 'onmouseout', 'onmouseover', 'onmouseup', 'onmousewheel', 'onpause', 'onplay', 'onplaying', 'onprogress', 'onratechange', 'onreset', 'onresize', 'onscroll', 'onseeked', 'onseeking', 'onselect', 'onshow', 'onsort', 'onstalled', 'onsubmit', 'onsuspend', 'ontimeupdate', 'ontoggle', 'onvolumechange', 'onwaiting']
-            let inputTypes = ['button', 'checkbox', 'color', 'date', 'datetime-local', 'email', 'file', 'hidden', 'image', 'month', 'number', 'password', 'radio', 'range', 'reset', 'search', 'submit', 'tel', 'text', 'time', 'url', 'week', 'select', 'textarea'];
-    
-            // BUILD FORM
-            if(formObject && api.validate.object(formObject)) {
-                console.log(formObject);
-                // VALIDATE FORM ATTRIBUTES
-                Object.entries(formObject).forEach(([attributeKey, attributeValue]) => {
-                    if(
-                        // DEFAULT
-                        !defaultFormAttributes.includes(attributeKey) &&
-                        // GLOBAL
-                        !globalAttributes.includes(attributeKey) && 
-                        // EVENT HANDLER
-                        !eventHandlerAttributes.includes(attributeKey) && 
-                        // DATA
-                        attributeKey.lastIndexOf('data-', 0) !== 0 &&
-                        // ARIA
-                        attributeKey.lastIndexOf('aria-', 0) !== 0 &&
-                        // CHILDREN
-                        attributeKey !== 'children'
-                    ) {
-                        delete formObject.attributeKey;
-                    }
-                });
-                // VALIDATE INPUT ATTRIBUTES
-                if(formObject.hasOwnProperty('children') && api.validate.array(formObject.children)) {
-                    formObject.children.forEach((child, index) => {
-                        if(api.validate.object(child)) {
-                            if(child.hasOwnProperty('type') && child.hasOwnProperty('name')) {
-                                if(child.type === 'group' && child.hasOwnProperty('children') && api.validate.array(child.children)) {
-                                    // VALIDATE GROUP
-                                }
-                                else if(
-                                    inputTypes.includes(child.type)
-                                ) {
-                                    Object.entries(child).forEach(([attributeKey, attributeValue]) => {
-                                        if(
-                                            // DEFAULT
-                                            !defaultInputAttributes.includes(attributeKey) && 
-                                            // EXTENDED
-                                            !extendedInputAttributes[child.type].includes(attributeKey) && 
-                                            // GLOBAL
-                                            !globalAttributes.includes(attributeKey) && 
-                                            // EVENT HANDLER
-                                            !eventHandlerAttributes.includes(attributeKey) && 
-                                            // DATA
-                                            attributeKey.lastIndexOf('data-', 0) !== 0 &&
-                                            // ARIA
-                                            attributeKey.lastIndexOf('aria-', 0) !== 0 &&
-                                            // LABEL
-                                            attributeKey !== 'label' &&
-                                            // SELECT OPTIONS
-                                            attributeKey !== 'options' && 
-                                            // REPEATED
-                                            attributeKey !== 'repeated' &&
-                                            // DESCRIPTION
-                                            attributeKey !== 'help'
-                                        ) {
-                                            delete attributeKey;
-                                        }
-    
-                                        if(attributeKey === 'options') {
-                                            attributeValue.forEach((option, index) => {
-                                                if(option.hasOwnProperty('value')) {
-                                                    Object.entries(option).forEach(([key, value]) => {
-                                                        if(!extendedInputAttributes.option.includes(key)) {
-                                                            delete option.key;
-                                                        }
-                                                    });
-                                                } else {
-                                                    delete option;
-                                                }
-                                            });
-                                        }
-                                    });
-    
-                                    if(dataObject.hasOwnProperty(child.name)) {
-                                        child['value'] = dataObject[child.name];
-                                    }
-                                }
-                                else {
-                                    delete child;
-                                }
-                            } else {
-                                api.log('warn', ['api.form.create()', 'Form.Children.Child Requires Type and Name']);
-                                delete child;
-                            }
-                        } else {
-                            api.log('error', ['api.form.create()', 'Form.Children.Child Object Expected']);
-                            return false;
-                        }
-                    });
-                } else {
-                    api.log('error', ['api.form.create()', 'Form.Children Array Required']);
-                    return false;
-                }
-            } else {
-                api.log('error', ['api.form.create()', 'Form Object Required']);
-                return false;
-            }
-    
-            // BUILD TEMPLATE
-            formDOM = api.form.template(formObject);
 
-            formObject.children.forEach(child => {
-                if(child.type === 'group') {
-                    child.children.forEach(input => {
-                        api.form.events(input, formDOM);
-                    });
+		// csrf
+		data.csrf = dom.querySelector('[data-api-csrf]') ? dom.querySelector('[data-api-csrf]').innerHTML : null
+	
+		// url
+		data.url = location
+
+		// query
+		data.query = data.hasOwnProperty('query') ? data.query[0] : null
+
+		// user
+		if(data.hasOwnProperty('user')) {
+			data.user = data.user[0]
+			// set avatar_url
+			data.user.user_avatar_URL = data.user.user_avatar_IMG ? new DOMParser().parseFromString(data.user.user_avatar_IMG, 'text/html').querySelector('img').getAttribute('src') : null
+		} else {
+			data.user = null
+		}
+		
+		// macro
+		data.macro = data.hasOwnProperty('macro') ? data.macro[0] : null
+
+		// errors
+		data.errors = []
+		if (dom.querySelector('#board-message')) {
+			let errors = dom.querySelectorAll('#board-message span.postcolor')
+			errors.forEach(error => {
+				data.errors.push(error.textContent)
+			})
+		} else if (dom.querySelector('.postcolor') && dom.querySelectorAll('.postcolor').length == 1) {
+			let error = dom.querySelector('.postcolor').textContent
+			if (error.startsWith('Sorry,')) {
+				data.errors.push(error)
+			}
+		} else if (dom.querySelector('#upccontent') && dom.querySelector('#ucpcontent > *:nth-child(2)').classList.contains('pformstrip')) {
+			let error = dom.querySelector('#ucpcontent > *:nth-child(2)').classList.textContent
+			if (error == 'No access permissions') {
+				data.errors.push('Access is Denied')
+			}
+		}
+
+		// page
+		data.page = data.query != null && data.query.act == 'Pages' && !data.errors.length && dom.querySelector('[data-api-hidden=board]') ? dom.querySelector('[data-api-hidden=board]') : null
+	
+		// navigation
+		data.navigations = []
+		if (dom.querySelector('#navstrip')) {
+			let navigationLinks = dom.querySelectorAll('#navstrip a')
+			navigationLinks.forEach(navigationLink => {
+				data.navigations.push({
+					navigation_name: navigationLink.textContent,
+					navigation_URL: navigationLink.getAttribute('href'),
+					navigation_LINK: navigationLink.outerHTML
+				})
+			})
+			let navigationLast = dom.querySelector('#navstrip').lastElementChild
+			if (navigationLast.nodeType == 3) {
+				data.navigations.push({
+					navigation_name: navigationLast.nodeValue.substring(1),
+					navigation_URL: null,
+					navigation_LINK: null
+				})
+			}
+		}
+
+		// categories
+		data.categories = []
+		if (data.hasOwnProperty('category')) {
+			data.categories = data.category
+			delete data.category
+			data.categories.forEach((category, categoryIndex, categories) => {
+				data.categories[categoryIndex].category_URL = `/index.php?c=${category.category_id}`
+				data.categories[categoryIndex].category_LINK = `<a href="/index.php?c=${category.category_id}">${category.category_name}</a>`
+			})
+		}
+
+		// forums
+		data.forums = []
+		if (data.hasOwnProperty('forum')) {
+			data.forums = data.forum
+			delete data.forum
+			data.forums.forEach((forum, forumIndex, forums) => {
+				data.forums[forumIndex].forum_URL = forum.forum_URL || `/index.php?showforum=${forum.forum_id}`
+				data.forums[forumIndex].forum_LINK = forum.forum_LINK || `<a href="/index.php?showforum=${forum.forum_id}">${forum.forum_name}</a>`
+				data.forums[forumIndex].last_unread_URL = `/index.php?showtopic=${forum.last_topic_id}&view=getlastpost`
+				// category_id, category_name, category_url, category_link
+				if(!forum.category_id) {
+					let category = data.navigations.slice(-2)[0]
+					data.forums[forumIndex].category_id = new URL(category.navigation_URL).searchParams.get('showforum') || new URL(category.navigation_URL).searchParams.get('c')
+					data.forums[forumIndex].category_name = category.navigation_name
+					data.forums[forumIndex].category_URL = category.navigation_URL
+					data.forums[forumIndex].category_LINK = category.navigation_LINK
+				} else {
+					let category = data.categories.filter(category => category.category_id == forum.category_id)[0]
+					data.forums[forumIndex] = {...data.forums[forumIndex], ...category}
+				}
+				// subforum_list_ARRAY
+				data.forums[forumIndex].subforums_list_ARRAY = []
+				if(forum.subforums_list_HTML != null) {
+					let subforumElements = new DOMParser().parseFromString(forum.subforums_list_HTML, 'text/html').querySelectorAll('a:not(.subforums-macro)')
+					if(subforumElements) {
+						subforumElements.forEach((subforum, subforumIndex, subforums) => {
+							data.forums[forumIndex].subforums_list_ARRAY.push({
+								subforum_id: new URL(subforum.getAttribute('href')).searchParams.get('showforum'),
+								subforum_name: subforum.innerHTML,
+								subforum_description: subforum.getAttribute('title'),
+								subforum_URL: subforum.getAttribute('href'),
+								subforum_LINK: subforum.outerHTML
+							})
+						})
+					}
+				}
+				// moderators_list_ARRAY
+				data.forums[forumIndex].moderators_list_ARRAY = []
+				if(forum.moderators_list_HTML != null) {
+					let moderatorElements = new DOMParser().parseFromString(forum.moderators_list_HTML, 'text/html').querySelectorAll('a')
+					if(moderatorElements) {
+						moderatorElements.forEach((moderator, moderatorIndex, moderators) => {
+							data.forums[forumIndex].moderators_list_ARRAY.push({
+								moderator_id: new URL(moderator.getAttribute('href')).searchParams.get('showuser'),
+								moderator_name: moderator.innerHTML,
+								moderator_URL: moderator.getAttribute('href'),
+								moderator_LINK: moderator.outerHTML
+							})
+						})
+					}
+				}
+				// active_user_list_ARRAY
+				data.forums[forumIndex].active_user_list_ARRAY = []
+				if(forum.active_user_list_HTML != null) {
+					let activeUserElements = new DOMParser().parseFromString(forum.active_user_list_HTML, 'text/html').querySelectorAll('a')
+					if(activeUserElements) {
+						activeUserElements.forEach((activeUser, activeUserIndex, activeUsers) => {
+							data.forums[forumIndex].active_user_list_ARRAY.push({
+								active_user_id: new URL(activeUser.getAttribute('href')).searchParams.get('showuser'),
+								active_user_name: activeUser.innerHTML,
+								active_user_URL: activeUser.getAttribute('href'),
+								active_user_LINK: activeUser.outerHTML
+							})
+						})
+					}
+				}
+			})
+		}
+		// subscription-forums
+
+		// topics
+		data.topics = []
+		// if view_forum > topics
+		if (data.hasOwnProperty('topic')) {
+			data.topics = data.topic
+			delete data.topic
+			data.topics.forEach((topic, topicIndex, topics) => {
+				data.topics[topicIndex].stats_replies_LINK = topic.stats_replies_LINK.replace(/^\s*/, '')
+				data.topics[topicIndex].stats_replies_URL = new DOMParser().parseFromString(topic.stats_replies_LINK, 'text/html').querySelector('a').getAttribute('href')
+				data.topics[topicIndex].created_author_URL = `/index.php?showuser=${topic.created_author_id}`
+				data.topics[topicIndex].last_post_author_name = new DOMParser().parseFromString(topic.last_post_author_LINK, 'text/html').querySelector('a').innerHTML
+				data.topics[topicIndex].last_post_author_URL = `/index.php?showuser=${topic.last_post_author_id}`
+			})
+		}
+		// if view_topic > posts
+		else if (dom.querySelector('.topic-title')) {
+			let topic_id = data.query.showtopic || data.query.t
+			let topic_name = dom.querySelector('.topic-title').textContent
+			data.topics.push({
+				topic_id: topic_id,
+				topic_name: topic_name,
+				topic_description: dom.querySelector('.topic-desc') ? dom.querySelector('.topic-desc').textContent.substring(2) : null,
+				topic_URL: `/index.php?showtopic=${topic_id}`,
+				topic_LINK: `<a href="/index.php?showtopic=${topic_id}">${topic_name}</a>`
+			})
+		}
+		// recent-topics
+		if(dom.querySelector('#recent-topics')) {
+			let topicElements = dom.querySelectorAll('#recent-topics tbody tr')
+			topicElements.forEach((topic, topicIndex, topics) => {
+				let topicElement = topic.querySelector('a[href*="showtopic"]')
+				let topic_id = new URL(topicElement.getAttribute('href')).searchParams.get('showtopic')
+				let forumElement = topic.querySelector('a[href*="showforum"]')
+				let forum_id = new URL(forumElement.getAttribute('href')).searchParams.get('showforum')
+				let forum = data.forums.filter(forum => forum.forum_id == forum_id)[0]
+				data.topics.push({
+					topic_id: topic_id,
+					topic_name: topicElement.textContent,
+					topic_URL: topicElement.getAttribute('href'),
+					topic_LINK: topicElement.outerHTML,
+					forum_id: forum_id,
+					forum_name: forum?.forum_name || null,
+					forum_URL: forum?.forum_URL || `/index.php?showforum=${forum_id}`,
+					forum_LINK: forum?.forum_LINK || null,
+				})
+			})
+		}
+		// search-topics + active-topics
+		if (document.querySelector('#search-topics, #active-topics')) {
+			let topicElements = document.querySelectorAll('#search-topics tbody tr:not(:first-child), #active-topics tbody tr:not(:first-child)')
+			topicElements.forEach((topic, topicIndex, topics) => {
+				let icon = topic.querySelector('td:first-child').innerHTML
+				let topic_LINK = topic.querySelector('td:nth-child(3) a')
+					let topic_id = new URL(topic_LINK.getAttribute('href')).searchParams.get('showtopic')
+					let topic_name = topic_LINK.textContent
+				let forum_LINK = topic.querySelector('td:nth-child(4) a')
+					let forum_id = new URL(forum_LINK.getAttribute('href')).searchParams.get('showforum')
+					let forum_name = forum_LINK.textContent
+				let created_author_LINK = topic.querySelector('td:nth-child(5) a')
+					let created_author_id = new URL(created_author_LINK.getAttribute('href')).searchParams.get('showuser')
+					let created_author_name = created_author_LINK.textContent
+				let stats_replies_NUMBER = topic.querySelector('td:nth-child(6)').innerHTML
+				let stats_views_NUMBER = topic.querySelector('td:nth-child(7)').innerHTML
+				let last_post_author_LINK = topic.querySelector('td:nth-child(8) b a')
+					let last_post_author_id = new URL(last_post_author_LINK.getAttribute('href')).searchParams.get('showuser')
+					let last_post_author_name = last_post_author_LINK.textContent
+				data.topics[topicIndex].push({
+					topic_id: topic_id,
+					topic_name: topic_name,
+					topic_URL: `/index.php?showtopic=${topic_id}`,
+					topic_HTML: `<a href="/index.php?showtopic=${topic_id}">${topic_name}</a>`,
+					forum_id: forum_id,
+					forum_name: forum_name,
+					forum_URL: `/index.php?showforum=${forum_id}`,
+					forum_LINK: `<a href="/index.php?showforum=${forum_id}">${forum_name}</a>`,
+					stats_replies_NUMBER: stats_replies_NUMBER,
+					stats_views_NUMBER: stats_views_NUMBER,
+					created_author_id: created_author_id,
+					created_author_name: created_author_name,
+					created_author_URL: `/index.php?showuser=${created_author_id}`,
+					created_author_LINK: `<a href="/index.php?showuser=${created_author_id}">${created_author_name}</a>`,
+					last_post_DATE: topic.querySelector('td:nth-child(7)').innerHTML.split('<br>')[0].trim(),
+					last_post_author_id: last_post_author_id,
+					last_post_author_name: last_post_author_name,
+					last_post_author_URL: `/index.php?showuser=${last_post_author_id}`,
+					last_post_author_LINK: `<a href="/index.php?showuser=${last_post_author_id}">${last_post_author_name}</a>`,
+				})
+			})
+		}
+		// subscription-topics
+
+		// posts
+		data.posts = []
+		if (data.hasOwnProperty('post')) {
+			data.posts = data.post
+			delete data.post
+			let forumElement = dom.querySelectorAll('#navstrip a[href*="showforum]').lastElementChild
+			let forum = forumElement ? {
+				forum_id: new URL(forumElement.getAttribute('href')).searchParams.get('showforum'),
+				forum_name: forumElement.innerHTML,
+				forum_URL: forumElement.getAttribute('href'),
+				forum_LINK: forumElement.outerHTML
+			} : {forum_id: null, forum_name: null, forum_URL: null, forum_LINK: null}
+			let topic = data.topics.length > 0 ? data.topics[0] : {topic_id: null, topic_name: null, topic_description: null, topic_URL: null, topic_LINK: null}
+			data.posts.forEach((post, postIndex, posts) => {
+				data.posts[postIndex].topic_id = topic.topic_id
+				data.posts[postIndex].topic_name = topic.topic_name
+				data.posts[postIndex].topic_description = topic.topic_description
+				data.posts[postIndex].topic_URL = topic.topic_URL
+				data.posts[postIndex].topic_LINK = topic.topic_LINK
+				data.posts[postIndex].forum_id = forum.forum_id
+				data.posts[postIndex].forum_name = forum.forum_name
+				data.posts[postIndex].forum_URL = forum.forum_URL
+				data.posts[postIndex].forum_LINK = forum.forum_LINK
+				data.posts[postIndex].post_LINK = `<a href="${post.post_URL}">#${post.post_id}</a>`
+                data.posts[postIndex].author_URL = `/index.php?showuser=${post.author_id}`
+                // data.posts[postIndex].author_ip_STRING = null
+				// post_attachments_ARRAY
+				data.posts[postIndex].post_attachments_ARRAY = []
+				if (post.post_attachments_HTML != null) {
+					let postAttachmentElements = new DOMParser().parseFromString(post.post_attachments_HTML, 'text/html').querySelectorAll('a')
+					postAttachmentElements.forEach((attachment, attachmentIndex, attachments) => {
+						file_URL = attachment.getAttribute('href')
+						file_name = new URL(file_URL).pathname.split('/').at(-1)
+						file_type = file_name.split('.').at(-1)
+						if(post.post_attachments_ARRAY.length && post.post_attachments_ARRAY[post.post_attachments_ARRAY.length - 1].file_url != file_URL) {
+							data.posts[postIndex].post_attachments_ARRAY.push({
+								file_name: file_name,
+								file_type: file_type,
+								file_URL: file_URL,
+								file_HTML: `<a href="${file_URL}">${file_name}</a>`
+							})
+						}
+					})
                 }
-                else {
-                    api.form.events(child, formDOM);
-                }
-            });
-    
-            return formDOM;
-        },
-        events: function(child, body = document) {
-            let element = body.querySelector('form *[name="' + child.name + '"]');
-    
-            if(element) {
-                child.errors = [];
-                if(
-                    child.hasOwnProperty('required') || 
-                    child.hasOwnProperty('minlength') || 
-                    child.hasOwnProperty('maxlength') || 
-                    child.type === 'email'
-                ) {
-                    element.addEventListener('keyup', function(e) {
-                        if(child.hasOwnProperty('required') && child.required == 'true') {
-                            if(element.value) {
-                                if(child.errors.includes('required')) {
-                                    child.errors.splice(child.errors.indexOf('required'));
-                                }
-                            } else {
-                                if(!child.errors.includes('required')) {
-                                    child.errors.push('required');
-                                }
-                            }
-                        }
-    
-                        if(child.hasOwnProperty('minlength')) {
-                            console.log(element.value, api.validate.min(element.value, child.minlength));
-                            if(element.value && api.validate.min(element.value, child.minlength)) {
-                                if(child.errors.includes('minlength')) {
-                                    child.errors.splice(child.errors.indexOf('minlength'));
-                                }
-                            } else {
-                                if(!child.errors.includes('minlength')) {
-                                    child.errors.push('minlength');
-                                }
-                            }
-                        }
-    
-                        if(child.hasOwnProperty('maxlength')) {
-                            if(element.value && api.validate.max(element.value, child.maxlength)) {
-                                if(child.errors.includes('maxlength')) {
-                                    child.errors.splice(child.errors.indexOf('maxlength'));
-                                }
-                            } else {
-                                if(!child.errors.includes('maxlength')) {
-                                    child.errors.push('maxlength');
-                                }
-                            }
-                        }
-    
-                        if(child.type === 'email') {
-                            if(element.value && api.validate.email(element.value)) {
-                                if(child.errors.includes('email')) {
-                                    child.errors.splice(child.errors.indexOf('email'));
-                                }
-                            } else {
-                                if(!child.errors.includes('email')) {
-                                    child.errors.push('email');
-                                }
-                            }
-                        }
-    
-                        let errorTemplate = `
-                            ${Object.entries(child.errors).length > 0 ? `
-                                <ul class="input-errors">
-                                    ${Object.entries(child.errors).map(([key, value]) => `
-                                        <li class="input-errors-item">
-                                            ${value == 'required' ? `Value is Required` : ``}
-                                            ${value == 'minlength' ? `Minimum length of ${child.minlength}`: ``}
-                                            ${value == 'maxlength' ? `Maximum length of ${child.maxlength}`: ``}
-                                            ${value == 'email' ? `Invalid Email` : ``}
-                                        </li>
-                                    `).join('')}
-                                </ul>
-                            `: ``}
-                        `;
-    
-                        if(!element.parentNode.querySelector('ul.input-errors')) {
-                            element.insertAdjacentHTML('afterend', errorTemplate);
-                        } else {
-                            element.parentNode.querySelector('ul.input-errors').remove();
-                            element.insertAdjacentHTML('afterend', errorTemplate);
-                        }
-                    });
-                }
-            }
-        },
-        template: function(formObject) {
-            let template = `
-            <form
-                ${Object.entries(formObject).map((attribute) => `
-                    ${attribute[0] !== 'children' ? `${attribute[0]}="${attribute[1]}"` : ``}
-                `).join(' ')}
-            >
-                ${formObject.hasOwnProperty('name') || formObject.hasOwnProperty('title') ? `
-                    <div class="form-title">${formObject.hasOwnProperty('title') ? `${formObject.title}` : `${formObject.name}`}</div>
-                `: ``}
-                ${formObject.children.map((child) => `
-                    ${child.type == 'group' ? `
-                        <div class="form-group">
-                            ${child.children.map((child) => `
-                                <div class="form-row${child.type == 'hidden' ? ` form-row--hidden hidden` : ``}" ${child.type == 'hidden' ? `hidden` : ``}>
-    
-                                </div>
-                            `)}
-                        </div>
-                    ` : `
-                        <div class="form-row${child.type == 'hidden' ? ` form-row--hidden hidden` : ``}" ${child.type == 'hidden' ? `hidden` : ``}>
-                            ${child.type !== 'select' && child.type !== 'textarea' && child.type !== 'submit' && child.type !== 'button' ? `
-                                <label for="${child.hasOwnProperty('id') ? `${child.id}` : `${child.name}`}">${child.hasOwnProperty('label') ? `${child.label}` : `${child.name}`}</label>
-                                <input 
-                                    ${Object.entries(child).map((attribute) => `
-                                        ${attribute[0] !== 'options' ? `${attribute[0]}="${attribute[1]}"` : ``}
-                                    `).join(' ')}
-                                    ${child.hasOwnProperty('options') ? `
-                                        list="
-                                            ${child.hasOwnProperty('id') ? `${child.id}-options` : `${child.name}-options`}
-                                        "
-                                    ` : ``}
-                                >
-                                ${child.hasOwnProperty('options') ? `
-                                    <datalist 
-                                        list="${child.hasOwnProperty('id') ? `${child.id}-options` : `${child.name}-options`}"
-                                    >
-                                        ${child.options.map((option) => `
-                                            <option value="${option.value}">
-                                        `).join('')}
-                                    </datalist>
-                                ` : ``}
-                                ${child.hasOwnProperty('help') ? `<div class="input-help">${child.help}</div>` : ``}
-                            ` : ``}
-                            ${child.type == 'submit' || child.type == 'button' ? `
-                                <input 
-                                    ${Object.entries(child).map((attribute) => `
-                                        ${attribute[0] !== 'options' ? `${attribute[0]}="${attribute[1]}"` : ``}
-                                    `).join(' ')}
-                                    ${child.hasOwnProperty('options') ? `
-                                        list="
-                                            ${child.hasOwnProperty('id') ? `${child.id}-options` : `${child.name}-options`}
-                                        "
-                                    ` : ``}
-                                >
-                            ` : ``}
-                            ${child.type == 'select' ? `
-                                <label for="${child.hasOwnProperty('id') ? `${child.id}` : `${child.name}`}">${child.hasOwnProperty('label') ? `${child.label}` : `${child.name}`}</label>
-                                <select
-                                    ${Object.entries(child).map((attribute) => `
-                                        ${attribute[0] !== 'options' ? `${attribute[0]}="${attribute[1]}"` : ``}
-                                    `).join(' ')}
-                                >
-                                    ${child.options.map((option) => `
-                                        <option 
-                                            ${Object.entries(option).map((attribute) => `
-                                                ${attribute[0] !== 'label' ? `${attribute[0]}="${attribute[1]}"` : ``}
-                                            `).join(' ')}
-                                        >${option.hasOwnProperty('label') ? `${option.label}` : `${option.value}`}</option>
-                                    `).join('')}
-                                </select>
-                                ${child.hasOwnProperty('help') ? `<div class="input-help">${child.help}</div>` : ``}
-                            ` : ``}
-                            ${child.type == 'textarea' ? `
-                                <label for="${child.hasOwnProperty('id') ? `${child.id}` : `${child.name}`}">${child.hasOwnProperty('label') ? `${child.label}` : `${child.name}`}</label>
-                                <textarea 
-                                    ${Object.entries(child).map((attribute) => `
-                                        ${attribute[0] !== 'value' ? `${attribute[0]}="${attribute[1]}"` : ``}
-                                    `).join(' ')}
-                                >${child.hasOwnProperty('value') ? `${child.value}` : ``}</textarea>
-                                ${child.hasOwnProperty('help') ? `<div class="input-help">${child.help}</div>` : ``}
-                            ` : ``}
-                        </div>
-                    `}
-                `).join('')}
-            </form>
-            `;
-    
-            return new DOMParser().parseFromString(template, 'text/html').body.querySelector('form');
+			})
+		}
+		// search-posts
+		if (dom.querySelector('form[action*="act=Search&CODE=show&searchid="]') && dom.querySelector('*[class^="post"]')) {
+			let postElements = dom.querySelectorAll('form[action*="act=Search&CODE=show&searchid="] ~ div.tableborder > table.tablebasic')
+			postElements.forEach((post, postIndex, posts) => {
+				let forum_LINK = post.querySelector('tbody tr:last-child td:last-child a:first-child')
+					let forum_id = new URL(forum_LINK.getAttribute('href')).searchParams.get('showforum')
+					let forum_name = forum_LINK.textContent
+				let topic_LINK = post.previousElementSibling.querySelector('a')
+					let topic_id = new URL(topic_LINK.getAttribute('href')).searchParams.get('showtopic')
+					let topic_name = topic_LINK.textContent
+				let author_LINK = post.querySelector('tbody tr:first-child td:first-child a')
+					let author_id = new URL(author_LINK.getAttribute('href')).searchParams.get('showuser')
+					let author_name = author_LINK.textContent
+				let topic_stats_replies_NUMBER = post.querySelector('tbody tr:nth-child(2) td:first-child b:first-of-type').textContent
+				let topic_stats_views_NUMBER = post.querySelector('tbody tr:nth-child(2) td:first-child b:last-of-type').textContent
+				let post_LINK = post.querySelector('tbody tr:last-child td:last-child a:last-child')
+					let post_id = new URL(post_LINK.getAttribute('href')).searchParams.get('p')
+				let search = new URL(post_LINK.getAttribute('href')).searchParams.get('hl')
+				data.posts.push({
+					forum_id: forum_id,
+					forum_name: forum_name,
+					forum_link: `/index.php?showforum=${forum_id}`,
+					forum_URL: `<a href="/index.php?showforum=${forum_id}">${forum_name}</a>`,
+					topic_id: topic_id,
+					topic_name: topic_name,
+					topic_URL: `/index.php?showtopic=${topic_id}`,
+					topic_HTML: `<a href="/index.php?showtopic=${topic_id}">${topic_name}</a>`,
+					topic_stats_replies_NUMBER: topic_stats_replies_NUMBER,
+					topic_stats_views_NUMBER: topic_stats_views_NUMBER,
+					author_id: author_id,
+					author_name: author_name,
+					author_URL: `/index.php?showuser=${author_id}`,
+					author_LINK: `<a href="/index.php?showuser=${author_id}">${author_name}</a>`,
+					post_id: post_id,
+					post_content: post.querySelector('tbody tr:nth-child(2) > td:last-child').innerHTML,
+					post_DATE: post.querySelector('tbody tr:first-child td:last-child').textContent.split(':')[1].trim(),
+					post_URL: `/index.php?act=ST&f=${forum_id}&t=${topic_id}&hl=${search}&view=findpost&p=${post_id}`,
+					post_LINK: `<a href="/index.php?act=ST&f=${forum_id}&t=${topic_id}&hl=${search}&view=findpost&p=${post_id}">${post_id}</a>`
+				})
+			})
+		}
+
+		// stats
+		if (data.hasOwnProperty('stats')) {
+			data.stats = data.stats[0]
+			let newest_member = new DOMParser().parseFromString(data.stats.stats_newest_member_LINK, 'text/html').querySelector('a')
+			data.stats.stats_newest_member_id = new URL(newest_member.getAttribute('id').getAttribute('href')).searchParams.get('showuser')
+			data.stats.stats_newest_member_name = newest_member.innerHTML
+			data.stats.stats_newest_member_URL = `/index.php?showuser=${data.stats.stats_newest_member_id}`
+			// online_now_list_ARRAY
+			data.stats.online_now_list_ARRAY = []
+			if(data.stats.online_now_list_HTML != null) {
+				// ...
+			}
+			// online_now_legend_ARRAY
+			data.stats.online_now_legend_ARRAY = []
+			if(data.stats.online_now_legend_ARRAY != null) {
+				// ...
+			}
+			// online_today_list_ARRAY
+			data.stats.online_today_list_ARRAY = []
+			if(data.stats.online_today_list_ARRAY != null) {
+				// ...
+			}
+		} else {
+			data.stats = null
+		}
+
+		// members (member-list, main-profile, mini-profile)
+		data.members = []
+		if (data.hasOwnProperty('member')) {
+			data.members = data.member
+			delete data.member
+			data.members.forEach((member, memberIndex, members) => {
+				if (!member.member_URL) { data.members[memberIndex].member_URL = `/index.php?showuser=${member.member_id}` }
+				if (!member.member_LINK) { data.members[memberIndex].member_LINK = `<a href="/index.php?showuser=${member.member_id}">${member.member_name}</a>` }
+				data.members[memberIndex].member_website_URL = (member.member_website_LINK ? new DOMParser().parseFromString(member.member_website_LINK, 'text/html').querySelector('a')?.getAttribute('href') || null : null)
+				// mini-profile topic
+				if (member.hasOwnProperty('topic_id')) {
+					let topic_name = dom.querySelector('.topic-title').innerHTML
+					let topic_description = dom.querySelector('.topic-descriiption').innerHTML
+					data.members[memberIndex].topic_name = topic_name
+					data.members[memberIndex].topic_URL = `/index.php?showtopic=${member.topic_id}`
+					data.members[memberIndex].topic_LINK = `<a href="/index.php?showtopic=${member.topic_id}">${topic_name}</a>`
+					data.members[memberIndex].topic_description = (topic_description != '' ? topic_description : null)
+				}
+				// mini-profile forum
+				if (member.hasOwnProperty('forum_id')) {
+					let forum = dom.querySelector(`#navstrip a[href*="showforum=${member.forum_id}"]`)
+					data.members[memberIndex].forum_name = forum.textContent
+					data.members[memberIndex].forum_URL = forum.getAttribute('href')
+					data.members[memberIndex].forum_LINK = `<a href="/index.php?showtopic=${member.forum_id}">${forum.textContent}</a>`
+				}
+				// visitors_JSON
+				if(typeof visitors_JSON !== 'undefined') {
+					data.members[memberIndex].visitors_JSON = visitors_JSON
+					data.members[memberIndex].visitors_ARRAY = JSON.parse(data.members[memberIndex].visitors_JSON)
+				} else {
+					data.members[memberIndex].visitors_JSON = null
+					data.members[memberIndex].visitors_ARRAY = []
+				}
+				// comments_JSON
+				if(typeof comments_JSON !== 'undefined') {
+					data.members[memberIndex].comments_JSON = comments_JSON
+					data.members[memberIndex].comments_ARRAY = JSON.parse(data.members[memberIndex].comments_JSON)
+				} else {
+					data.members[memberIndex].comments_JSON = null
+					data.members[memberIndex].comments_ARRAY = []
+				}
+				// friends_JSON
+				if(typeof friends_JSON !== 'undefined') {
+					data.members[memberIndex].friends_JSON = friends_JSON
+					data.members[memberIndex].friends_ARRAY = JSON.parse(data.members[memberIndex].friends_JSON)
+				} else {
+					data.members[memberIndex].friends_JSON = null
+					data.members[memberIndex].friends_ARRAY = []
+				}
+				// subaccounts_ARRAY
+				data.members[memberIndex].subaccounts_ARRAY = []
+				if(member.subaccounts_INPUT) {
+					let subaccountElements = new DOMParser().parseFromString(member.subaccounts_INPUT, 'text/html').querySelectorAll('option')
+					subaccountElements.forEach((subaccount, subaccountIndex, subaccounts) => {
+						if (subaccountIndex != 0) {
+							let member_id = subaccount.value
+							let member_name = subaccount.textContent.replace('»', '').trim()
+							data.members[memberIndex].subaccounts_ARRAY.push({
+								member_id: subaccount.value,
+								member_name: member_name,
+								member_LINK: `<a href="/index.php?showuser=${member_id}">${member_name}</a>`,
+								member_URL: `/index.php?showuser=${member_id}`
+							})
+						}
+					})
+				}
+			})
+		}
+
+		// messages
+		data.messages = []
+		// inbox
+		// if (dom.querySelector('...')) {
+		// 	let messageElements = dom.querySelectorAll('...')
+		// 	messageElements.forEach((message, messageIndex, messages) => {
+
+		// 		data.messages.push({
+
+		// 		})
+		// 	})
+		// }
+		// single-message
+		// if (dom.querySelector('...')) {
+		// 	let messageElement = dom.querySelector('...')
+		// 	data.messages.push({
+
+		// 	})
+		// }
+
+		// alerts
+		data.alerts = []
+		if (dom.querySelector('form[action*="act=UserCP&CODE=alerts"]')) {
+            let alertElements = dom.querySelectorAll('tr[class*="alert-"]')
+            alertElements.forEach((alert, alert_index, alerts) => {
+
+				data.alerts.push({
+
+				})
+            })
+        } else if (dom.querySelector('.recent-alerts-msg')) {
+            let alertElements = dom.querySelectorAll('.recent-alerts-msg')
+            alertElements.forEach((alert, alert_index, alerts) => {
+                
+				data.alerts.push({
+					
+				})
+            })
         }
-    }
-};
+
+		// pagination
+		data.pagination = null
+		if (dom.querySelector('span.pagination') && dom.querySelector('span.pagination').childNodes.length > 1) {
+			let paginationElement = dom.querySelector('span.pagination')
+			let current_page_NUMBER = paginationElement.querySelector('.pagination_current').textContent
+			let page_NUMBER = Number(paginationElement.querySelector('.pagination_page').textContent)
+			data.pagination = {
+				total_pages_NUMBER: paginationElement.querySelector('.pagination_pagetxt').textContent.match(/\((\d+)\)/)[1],
+				current_page_NUMBER: current_page_NUMBER,
+				per_page_NUMBER: (page_NUMBER == 1 ? data.query.st / current_page_NUMBER - 1 : new URL(pageElement.getAttribute('href')).searchParams.get('st') / (page_NUMBER - 1))
+			}
+		}
+
+		// no return value
+		this.data = data
+	}
+
+	getData () {
+		return this.data
+	}
+}
